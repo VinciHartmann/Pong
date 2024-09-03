@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Spiel</title>
+    <link rel="manifest" href="manifest.webmanifest">
+</head>
+
+<body>
+
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #4c4d4a;
+            font-family: Arial, sans-serif;
+        }
+        
+        h1 {
+            color: #fff;
+            margin: 0;
+            padding: 10px 0;
+        }
+        
+        canvas {
+            border: 1px solid #fff;
+            background-color: black;
+        }
+        
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #fff;
+            border: none;
+            color: #4c4d4a;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #4c4d4a;
+            color: #fff;
+        }
+        
+        #score {
+            color: #fff;
+            font-size: 24px;
+            margin-top: 10px;
+        }
+        
+        #menu {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+        }
+        
+        #menu button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+
+
+
+    <h1>
+        Willkommen zu Pong!
+    </h1>
+    <h1>
+        :^)
+    </h1>
+    <canvas id="pongCanvas" width="900" height="500"></canvas>
+    <button id="startStopButton">Start</button>
+    <div id="menu">
+        <h1 id="winner"></h1>
+        <button onclick="restartGame()">Neustart</button>
+    </div>
+    <script>
+        const canvas = document.getElementById("pongCanvas");
+        const context = canvas.getContext("2d");
+        const startStopButton = document.getElementById("startStopButton");
+        const restartButton = document.getElementById("restartButton");
+        const menu = document.getElementById("menu");
+        const winnerText = document.getElementById("winner");
+
+        const paddleWidth = 10,
+            paddleHeight = 100;
+        const ballRadius = 10;
+
+        let playerY = (canvas.height - paddleHeight) / 2;
+        let aiY = (canvas.height - paddleHeight) / 2;
+        let ballX = canvas.width / 2,
+            ballY = canvas.height / 2;
+        let ballSpeedX = 3,
+            ballSpeedY = 3;
+        let isPaused = true;
+        let gameInterval;
+
+        let playerScore = 0;
+        let aiScore = 0;
+
+        const winningScore = 11;
+        let gameOver = false;
+
+        const levels = [{
+            speedX: 3,
+            speedY: 3
+        }, {
+            speedX: 5,
+            speedY: 5
+        }, {
+            speedX: 7,
+            speedY: 7
+        }];
+        let currentLevel = 0;
+
+        let upPressed = false;
+        let downPressed = false;
+
+        document.addEventListener("keydown", keyDownHandler);
+        document.addEventListener("keyup", keyUpHandler);
+        canvas.addEventListener("mousemove", mouseMoveHandler);
+
+        function keyDownHandler(e) {
+            if (e.key === "ArrowUp") {
+                upPressed = true;
+            } else if (e.key === "ArrowDown") {
+                downPressed = true;
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "ArrowUp") {
+                upPressed = false;
+            } else if (e.key === "ArrowDown") {
+                downPressed = false;
+            }
+        }
+
+        function mouseMoveHandler(e) {
+            const relativeY = e.clientY - canvas.getBoundingClientRect().top;
+            if (relativeY > 0 && relativeY < canvas.height) {
+                playerY = relativeY - paddleHeight / 2;
+            }
+        }
+
+        function drawRect(x, y, width, height, color) {
+            context.fillStyle = color;
+            context.fillRect(x, y, width, height);
+        }
+
+        function drawCircle(x, y, radius, color) {
+            context.fillStyle = color;
+            context.beginPath();
+            context.arc(x, y, radius, 0, Math.PI * 2, false);
+            context.closePath();
+            context.fill();
+        }
+
+        function drawText(text, x, y, color) {
+            context.fillStyle = color;
+            context.font = "24px Arial";
+            context.fillText(text, x, y);
+        }
+
+        function draw() {
+            drawRect(0, 0, canvas.width, canvas.height, "#000");
+            drawRect(0, playerY, paddleWidth, paddleHeight, "#fff");
+            drawRect(canvas.width - paddleWidth, aiY, paddleWidth, paddleHeight, "#fff");
+            drawCircle(ballX, ballY, ballRadius, "#fff");
+            drawText(playerScore, canvas.width / 4, 60, "#fff");
+            drawText(aiScore, 3 * canvas.width / 4, 60, "#fff");
+        }
+
+        function move() {
+            if (!isPaused) {
+                ballX += ballSpeedX;
+                ballY += ballSpeedY;
+
+                if (ballY + ballRadius > canvas.height || ballY - ballRadius < 0) {
+                    ballSpeedY = -ballSpeedY;
+                }
+
+                if (ballX - ballRadius < paddleWidth) {
+                    if (ballY > playerY && ballY < playerY + paddleHeight) {
+                        ballSpeedX = -ballSpeedX;
+                        increaseBallSpeed();
+                    } else {
+                        aiScore++;
+                        resetBall();
+                    }
+                }
+
+                if (ballX + ballRadius > canvas.width - paddleWidth) {
+                    if (ballY > aiY && ballY < aiY + paddleHeight) {
+                        ballSpeedX = -ballSpeedX;
+                        increaseBallSpeed();
+                    } else {
+                        playerScore++;
+                        resetBall();
+                    }
+                }
+
+                aiY += (ballY - (aiY + paddleHeight / 2)) * 0.125;
+
+                if (playerScore >= winningScore || aiScore >= winningScore) {
+                    gameOver = true;
+                    showWinner();
+                }
+            }
+        }
+
+        function increaseBallSpeed() {
+            ballSpeedX *= 1.1;
+            ballSpeedY *= 1.1;
+        }
+
+        function resetBall() {
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+            ballSpeedX = levels[currentLevel].speedX;
+            ballSpeedY = levels[currentLevel].speedY;
+        }
+
+        function game() {
+            move();
+            draw();
+        }
+
+        function startGame() {
+            if (isPaused) {
+                gameInterval = setInterval(game, 1000 / 60);
+                startStopButton.textContent = "Stopp";
+            } else {
+                clearInterval(gameInterval);
+                startStopButton.textContent = "Start";
+            }
+            isPaused = !isPaused;
+        }
+
+        function showWinner() {
+            winnerText.textContent = playerScore >= winningScore ? "Spieler gewinnt!" : "AI gewinnt!";
+            menu.style.display = "flex";
+            clearInterval(gameInterval);
+        }
+
+        function restartGame() {
+            playerScore = 0;
+            aiScore = 0;
+            gameOver = false;
+            menu.style.display = "none";
+            resetBall();
+            startGame();
+        }
+
+        startStopButton.addEventListener("click", startGame);
+        restartButton.addEventListener("click", restartGame);
+
+        function movePaddle() {
+            if (upPressed) {
+                playerY = Math.max(playerY - 7, 0);
+            } else if (downPressed) {
+                playerY = Math.min(playerY + 7, canvas.height - paddleHeight);
+            }
+        }
+
+        function gameLoop() {
+            movePaddle();
+            move();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+
+</html>
